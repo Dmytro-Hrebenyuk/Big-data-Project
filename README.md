@@ -3,7 +3,7 @@
 Group Assignment 1. A bronze → silver → gold lakehouse on Databricks for the TPC-H data
 (`samples.tpch`), built to answer the Regional Manager's questions.
 
-- **Presentation:** `<link>`
+- **Presentation:** `https://docs.google.com/presentation/d/1SHMIUOGyvjbQifZ7B_uuezxk6qnC560m1rzRxHj5Txg/edit?usp=sharing`
 - **Team:** `Shumylovych Matvii, Hrebenyuk Dmytro`
 
 ## Contents
