@@ -1,0 +1,86 @@
+erDiagram
+    REGION ||--o{ NATION : "region_key"
+    NATION ||--o{ CUSTOMER : "nation_key"
+    NATION ||--o{ SUPPLIER : "nation_key"
+    PART ||--o{ PARTSUPP : "part_key"
+    SUPPLIER ||--o{ PARTSUPP : "supplier_key"
+    CUSTOMER ||--o{ ORDERS : "customer_key"
+    ORDERS ||--o{ LINEITEM : "order_key"
+    PARTSUPP ||--o{ LINEITEM : "part_key, supplier_key"
+    REGION {
+        bigint region_key PK
+        string name
+        string comment
+    }
+    NATION {
+        bigint nation_key PK
+        string name
+        bigint region_key FK
+        string comment
+    }
+    CUSTOMER {
+        bigint customer_key PK
+        string name
+        string address
+        bigint nation_key FK
+        string phone
+        decimal_18_2 account_balance
+        string market_segment
+        string comment
+    }
+    SUPPLIER {
+        bigint supplier_key PK
+        string name
+        string address
+        bigint nation_key FK
+        string phone
+        decimal_18_2 account_balance
+        string comment
+    }
+    PART {
+        bigint part_key PK
+        string name
+        string manufacturer
+        string brand
+        string type
+        int size
+        string container
+        decimal_18_2 retail_price
+        string comment
+    }
+    PARTSUPP {
+        bigint part_key PK, FK
+        bigint supplier_key PK, FK
+        int available_quantity
+        decimal_18_2 supply_cost
+        string comment
+    }
+    ORDERS {
+        bigint order_key PK
+        bigint customer_key FK
+        string order_status
+        decimal_18_2 total_price
+        date order_date
+        string order_priority
+        string clerk
+        int ship_priority
+        string comment
+    }
+    LINEITEM {
+        bigint order_key PK, FK
+        int line_number PK
+        bigint part_key FK
+        bigint supplier_key FK
+        decimal_18_2 quantity
+        decimal_18_2 extended_price
+        decimal_18_2 discount
+        decimal_18_2 tax
+        string return_flag
+        string line_status
+        date ship_date
+        date commit_date
+        date receipt_date
+        string ship_instructions
+        string ship_mode
+        string comment
+    }

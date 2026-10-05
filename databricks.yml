@@ -1,0 +1,30 @@
+# Databricks Asset Bundle - deploys the notebooks + src and one job that runs them in order.
+#   databricks bundle deploy -t dev      &&  databricks bundle run tpch_regional_pipeline -t dev
+#   databricks bundle deploy -t preprod  --var catalog=<your_catalog>
+bundle:
+  name: tpch-lakehouse-regional
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Target Unity Catalog catalog (must exist)
+    default: workspace
+  env:
+    description: Environment suffix used in schema names (tpch_<env>_<layer>)
+    default: dev
+  source_catalog:
+    description: Catalog that holds the TPC-H source
+    default: samples
+  source_schema:
+    description: Schema that holds the TPC-H source
+    default: tpch
+
+targets:
+  dev:
+    mode: development
+    default: true
+  preprod:
+    variables:
+      env: preprod
