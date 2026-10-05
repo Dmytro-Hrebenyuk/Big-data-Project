@@ -4,8 +4,6 @@ version = "0.1.0"
 description = "TPC-H bronze / silver / gold lakehouse for the Regional Manager profile (one Databricks notebook)"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
-# The notebook runs on Databricks, which provides Spark and Delta.
-# These are the libraries it imports, pinned so the notebook can also be opened and linted locally.
 dependencies = [
     "pyspark==3.5.3",
     "matplotlib>=3.8",
