@@ -9,80 +9,49 @@ products with limited geographical coverage.
 |---|---|
 | **Presentation** | `<ADD LINK TO THE SLIDES HERE>` |
 | **Team** | `<Name 1>` — bronze & silver · `<Name 2>` — gold & business questions · `<Name 3>` — validation, monitoring & alerts · `<Name 4>` — repo, README, presentation |
-| **Stack** | Databricks (Unity Catalog, Delta, serverless), PySpark + Spark SQL, `uv`, pytest |
+| **Stack** | Databricks (Unity Catalog, Delta), PySpark + Spark SQL in one notebook, `uv` |
 
 ---
 
 ## 1. What is in the repo
 
 ```
-├── notebooks/                 thin Databricks notebooks – run these in order
-│   ├── _common.py             widgets + config (included with %run)
-│   ├── 01_bronze.py           source → bronze, as is
-│   ├── 02_silver.py           bronze → silver (3NF, quality rules, quarantine, constraints)
-│   ├── 03_gold.py             silver → gold star schema + aggregates
-│   ├── 04_validation.py       43 cross-layer checks, fails on any violation
-│   ├── 05_business_questions.py   the 4 questions: SQL + charts
-│   └── 06_monitoring_alerts.py    revenue by region over time + alert rules + demo
-├── src/tpch_lakehouse/        all logic lives here (importable, unit-testable)
-│   ├── config.py              every catalog / schema / table name – nothing is hard-coded elsewhere
-│   ├── bronze.py  silver.py  gold.py
-│   ├── validation.py  questions.py  monitoring.py
-├── tests/                     pytest suite – runs the whole pipeline on local Spark
-├── scripts/                   local runner, local TPC-H generator, ER-diagram renderer
-├── sql/alert_region_revenue.sql   query for the Databricks SQL alert
-├── docs/                      ER diagram (png / svg / mermaid) and result charts
-├── databricks.yml + resources/    Databricks Asset Bundle: one job that runs everything
-└── pyproject.toml + uv.lock   uv project
+├── tpch_lakehouse_regional.ipynb   the whole solution, top to bottom
+├── docs/                           ER diagram and result charts
+├── pyproject.toml + uv.lock        uv project
+└── README.md
 ```
+
+The notebook has seven sections: setup → bronze → silver → gold → validation → business
+questions → monitoring and alerting.
 
 ## 2. How to run it
 
-### In Databricks (the real thing)
+1. In Databricks: **Workspace → Create → Git folder**, paste this repo's URL
+   (or **Import** the `.ipynb` directly).
+2. Open `tpch_lakehouse_regional.ipynb`, attach any compute, and **Run all**.
 
-1. **Workspace → Create → Git folder** and paste this repo's URL.
-2. Open `notebooks/01_bronze.py`, attach serverless compute, and set the widgets
-   (defaults work on a standard workspace):
+| widget | default | meaning |
+|---|---|---|
+| `catalog` | `workspace` | target catalog (must exist) |
+| `env` | `dev` | `dev` / `preprod` / `prod` — becomes part of the schema names |
+| `source` | `samples.tpch` | where TPC-H lives |
 
-   | widget | default | meaning |
-   |---|---|---|
-   | `catalog` | `workspace` | target catalog (must exist) |
-   | `env` | `dev` | `dev` / `preprod` / `prod` – becomes part of the schema name |
-   | `source_catalog`, `source_schema` | `samples`, `tpch` | where TPC-H lives |
-
-3. Run `01` → `02` → `03` → `04` → `05` → `06`.
-
-Or deploy everything as a job with the bundle:
-
-```bash
-databricks bundle deploy -t dev
-databricks bundle run tpch_regional_pipeline -t dev
-```
-
-### On a laptop (tests, no Databricks needed)
-
-```bash
-uv sync                              # creates .venv from uv.lock
-uv run pytest                        # 16 tests: full pipeline on local Spark, TPC-H SF 0.01
-uv run python scripts/run_local.py   # same, but prints every table and answer
-```
-
-Needs Java 17+ for Spark. Local runs use parquet tables instead of Delta; the code path is
-otherwise identical (only `Config` differs).
+Re-running is safe: every table is overwritten. To schedule it, add the notebook as a single
+task in a Databricks Job. Locally, `uv sync` installs the libraries the notebook imports.
 
 ## 3. Portability and the "pre-production only" assumption
 
-* **One naming rule:** `<catalog>.<project>_<env>_<layer>.<table>`, e.g.
-  `workspace.tpch_dev_silver.customer`. It is implemented once, in `config.py`. Moving to
-  another workspace or promoting dev → preprod → prod changes widget values or bundle
-  variables — never code.
-* **We only ever see pre-production data**, so nothing in the solution depends on specific
-  data values: there are no hard-coded keys, dates or expected totals. Quality rules are
-  structural (keys resolve, amounts are positive, layers reconcile), "complete month" is
-  derived from the data's own min/max date, and alert thresholds are parameters in `Config`.
+* **One naming rule:** `<catalog>.tpch_<env>_<layer>.<table>`, e.g.
+  `workspace.tpch_dev_silver.customer`, built once in the setup cell. Moving to another
+  workspace or promoting dev → preprod → prod changes widget values — never code.
+* **We only ever see pre-production data**, so nothing depends on specific data values: there
+  are no hard-coded keys, dates or expected totals. Quality rules are structural (keys resolve,
+  amounts are positive, layers reconcile), "complete month" is derived from the data's own
+  min/max date, and alert thresholds are two named constants.
 * Because pre-prod data is clean, we cannot *wait* for a bad row or a revenue drop to prove the
-  safety nets work. Both are demonstrated by **injecting** faults: broken rows in
-  `04_validation`, a simulated 30% regional drop in `06_monitoring_alerts`.
+  safety nets work. Both are demonstrated by **injecting** faults: broken customer rows in the
+  validation section, a simulated 30% regional drop in the monitoring section.
 
 ## 4. The layers
 
@@ -120,8 +89,8 @@ the `c_`/`o_`/`l_` prefixes are dropped (`c_custkey` → `customer_key`), money 
 line items, but it is a fact about the order that depends only on the order key, so it does
 not break 3NF.
 
-**How quality is enforced.** Each table is declared once in `silver.SPECS`: columns, primary
-key, NOT NULL columns, CHECK rules and foreign keys. A generic rule engine then:
+**How quality is enforced.** Each table is declared once in the `SPECS` dictionary: columns, primary
+key, NOT NULL columns, CHECK rules and foreign keys. One function then:
 
 1. evaluates every rule for every row and records the failed rule names;
 2. writes passing rows to `<table>` and failing rows to `<table>_quarantine` (with the reasons)
@@ -157,6 +126,7 @@ A small star schema plus three aggregates.
 | `agg_part_region_revenue` | part × region | Q1 |
 | `agg_part_coverage` | part (incl. never-sold parts) | Q4 |
 | `region_revenue_alerts` | region × complete month | alerting |
+| `dq_results` | one row per check per run | validation history |
 
 `fact_sales` carries **both** geographies for each line — the customer's nation/region and the
 supplier's — plus `is_cross_region`, so the two roles can never be mixed up in a query.
@@ -172,17 +142,16 @@ supplier's — plus `is_cross_region`, so the two roles can never be mixed up in
 | **Complete month** | a month fully covered by the data. The data ends on 1998-08-02, so August 1998 is partial and is excluded from every month-over-month comparison and alert. |
 | **Product** | a `part` (identified by `part_key`). |
 
-The revenue expression exists in exactly one place per layer (`gold.py` for gold,
-`validation.BRONZE_REVENUE` / `SILVER_REVENUE` for reconciliation), and every business query
-is a named template in `questions.py`.
+The revenue expression is written once per layer: in the `fact_sales` query for gold, and in
+the `B_REV` / `S_REV` constants used to reconcile bronze and silver.
 
 ## 6. Answers to the business questions
 
 > **Read this first.** The figures below were computed with this repo's gold SQL on a
 > **local replica**: TPC-H generated with the standard `dbgen` at scale factor 5, which has
 > the same row counts as `samples.tpch` (29,999,795 line items, 7,500,000 orders, 750,000
-> customers). They should match Databricks exactly, but **re-run `05_business_questions` in
-> your workspace and replace anything that differs** before presenting.
+> customers). They should match Databricks exactly, but **run the notebook in your workspace
+> and replace anything that differs** before presenting.
 
 **Q1 — Top 5 products by revenue in Asia**
 
@@ -240,8 +209,8 @@ supply-concentration risk the Regional Manager should know about.
 
 ## 7. Validation — how we show the numbers can be trusted
 
-`04_validation` runs every check as one SQL statement that returns the **number of
-violations** (0 = pass), appends the results to `<ops>.dq_results`, and fails the job on any
+The validation section runs every check as one SQL statement that returns the **number of
+violations** (0 = pass), appends the results to `gold.dq_results`, and fails the run on any
 violation. 43 checks in three groups:
 
 | group | profile rule | what is checked |
@@ -254,18 +223,18 @@ Why double counting cannot happen: a sale is attributed to exactly one region be
 order → customer → nation → region is a chain of many-to-one links, each proven unique by a
 check above.
 
-The pytest suite adds the negative cases — a customer with an unknown nation, a missing
-nation, a duplicate key, a nation with an unknown region, a line item whose (part, supplier)
-pair does not exist — and asserts each one is quarantined with the right reason.
+The notebook also shows the negative cases: three deliberately broken customers (unknown
+nation, missing nation, duplicate key) are pushed through the silver rules and each comes out
+flagged with the rule it broke.
 
 ## 8. Monitoring and alerting
 
 **Monitor:** `agg_region_revenue_monthly` — revenue, revenue per day, share and rank for every
-region and month (`06_monitoring_alerts` charts it).
+region and month (charted in the notebook).
 
 ![Monitoring](docs/img/monitoring_region_revenue.png)
 
-**Alert rules** (evaluated on complete months only; thresholds are `Config` parameters):
+**Alert rules** (evaluated on complete months only; thresholds are two constants in the notebook):
 
 | rule | fires when | default |
 |---|---|---|
@@ -273,7 +242,7 @@ region and month (`06_monitoring_alerts` charts it).
 | `RANK_LOSS` / `RANK_GAIN` | the region's rank changed **and** its revenue share moved away from its trailing 3-month average | ≥ 1 percentage point |
 
 How the thresholds were chosen — by profiling 79 complete months × 5 regions (same local
-replica as above; notebook 06 recomputes the table):
+replica as above; the notebook recomputes the table):
 
 * Month-to-month change in revenue per day has a standard deviation of **0.94%** and never
   exceeded **3.35%**. 5% is about five standard deviations: silent on all of history, loud on a
@@ -287,14 +256,14 @@ replica as above; notebook 06 recomputes the table):
 
 **Demo:** the notebook cuts ASIA's latest complete month by 30% in memory and re-runs the same
 function; ASIA is flagged `VOLUME_DROP, RANK_LOSS`. The persisted
-`region_revenue_alerts` table feeds a Databricks SQL alert (`sql/alert_region_revenue.sql`,
+`region_revenue_alerts` table feeds a Databricks SQL alert (the notebook prints the query;
 condition `alerts > 0`).
 
 ## 9. Challenges we faced
 
 * **Constraints that don't constrain.** Unity Catalog accepts PRIMARY KEY / FOREIGN KEY but
   does not enforce them, so "enforced data quality" had to be built into the pipeline
-  (rule engine + quarantine) and proven by validation.
+  (rules + quarantine) and proven by validation.
 * **Clean data hides broken checks.** Every rule passes on TPC-H, which says nothing about
   whether the rule works. We had to inject bad rows and a fake revenue drop to prove it.
 * **"Which region?" is ambiguous.** A sale has a customer region and a supplier region; mixing
@@ -303,5 +272,5 @@ condition `alerts > 0`).
   almost every month. The thresholds had to come from profiling, not intuition.
 * **The last month is partial** (data ends 1998-08-02) and looks like a 93% crash unless
   incomplete periods are excluded.
-* **Portability.** No hard-coded names; notebooks import shared code from `src/` so the same
-  logic runs in a Git folder, as a bundle job, and in local tests.
+* **Portability.** No hard-coded names: catalog, environment and source are widgets, and every
+  table name is built from them in one place.
